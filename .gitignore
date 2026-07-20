@@ -1,0 +1,12 @@
+*DROIDinthisfolder*
+*CLAUDEinthisfolder*
+node_modules/
+.env.local
+.env
+dist/
+uploads/
+renders/
+.DS_Store
+/scratch
+/docs
+.claude/

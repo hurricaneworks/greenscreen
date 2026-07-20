@@ -1,0 +1,22 @@
+{
+  "name": "video_pub_green",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "scripts": {
+    "dev": "NODE_OPTIONS=--max-http-header-size=65536 vite --port 4050",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "react": "19.2.7",
+    "react-dom": "19.2.7"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.3",
+    "typescript": "7.0.2",
+    "vite": "^8.1.5"
+  }
+}
