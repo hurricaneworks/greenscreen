@@ -2,7 +2,7 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import fs from "node:fs";
 import path from "node:path";
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 
 const ROOT = process.cwd();
 const UPLOADS_DIR = path.join(ROOT, "uploads");
@@ -11,6 +11,26 @@ const TEMPLATES_DIR = path.join(ROOT, "public", "templates");
 
 function ensureDir(dir) {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+}
+
+// Rendering shells out to ffmpeg/ffprobe, YouTube capture to yt-dlp. None of them are
+// npm dependencies, so check for them once at startup and give a plain message instead
+// of a cryptic "spawn ffmpeg ENOENT" the first time someone clicks Render.
+const TOOL_INSTALL_HINT = {
+  ffmpeg: "macOS: brew install ffmpeg | Windows: winget install ffmpeg | Debian/Ubuntu: sudo apt install ffmpeg",
+  ffprobe: "ffprobe ships with ffmpeg; install ffmpeg and it comes too",
+  "yt-dlp": "macOS: brew install yt-dlp | Windows: winget install yt-dlp | pip install yt-dlp",
+};
+
+function commandExists(cmd) {
+  const result = spawnSync(cmd, ["-version"], { stdio: "ignore" });
+  return !result.error;
+}
+
+const missingTools = new Set();
+
+function missingToolError(cmd) {
+  return `${cmd} is not installed or not on your PATH. Install it (${TOOL_INSTALL_HINT[cmd]}), then restart "npm run dev".`;
 }
 
 function sanitiseName(name) {
@@ -196,6 +216,19 @@ function apiMiddlewarePlugin() {
       ensureDir(UPLOADS_DIR);
       ensureDir(RENDERS_DIR);
 
+      for (const cmd of ["ffmpeg", "ffprobe"]) {
+        if (!commandExists(cmd)) {
+          missingTools.add(cmd);
+          server.config.logger.error(`\n  [meme-maker] ${missingToolError(cmd)} Rendering will not work until it is.\n`);
+        }
+      }
+      if (!commandExists("yt-dlp")) {
+        missingTools.add("yt-dlp");
+        server.config.logger.warn(
+          `\n  [meme-maker] yt-dlp not found on PATH. Drag-and-drop still works; YouTube capture will not. (${TOOL_INSTALL_HINT["yt-dlp"]})\n`
+        );
+      }
+
       server.middlewares.use(async (req, res, next) => {
         try {
           const url = new URL(req.url, "http://localhost");
@@ -275,6 +308,10 @@ function apiMiddlewarePlugin() {
 
           // POST /api/youtube
           if (req.method === "POST" && pathname === "/api/youtube") {
+            if (missingTools.has("yt-dlp")) {
+              sendJson(res, 500, { error: missingToolError("yt-dlp") });
+              return;
+            }
             let body;
             try {
               body = await readJsonBody(req);
@@ -403,6 +440,12 @@ function apiMiddlewarePlugin() {
 
           // POST /api/render
           if (req.method === "POST" && pathname === "/api/render") {
+            for (const cmd of ["ffmpeg", "ffprobe"]) {
+              if (missingTools.has(cmd)) {
+                sendJson(res, 500, { error: missingToolError(cmd) });
+                return;
+              }
+            }
             let body;
             try {
               body = await readJsonBody(req);
